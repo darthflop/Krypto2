@@ -48,6 +48,8 @@ fn universal_forgery(keypair: Keypair) {
     let inverse = r.mod_inverse(n);
 
     let s = inverse * oracle_signature % n;
+    //TODO
+
 
     println!("Message: {}", message);
     println!("Signature from Oracle: {}", &oracle_signature);
