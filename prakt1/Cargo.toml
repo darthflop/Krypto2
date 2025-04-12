@@ -1,0 +1,8 @@
+[package]
+name = "prakt1"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rsa = "0.9"
+rand = "0.8"
