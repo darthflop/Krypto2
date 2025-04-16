@@ -1,5 +1,5 @@
 # Krypto2
-repo used to solve my Krypto2 tasks
+These practical excersices are part of an advanced crypto lecture.
 
 
 # Excersices
