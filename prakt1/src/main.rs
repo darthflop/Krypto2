@@ -1,107 +1,62 @@
-use rsa::{traits::{PrivateKeyParts, PublicKeyParts}, BigUint, RsaPrivateKey, RsaPublicKey};
-use rand::{rngs::OsRng, Rng};
+
+use num_bigint::BigUint;
 use num_traits::One;
-use num_bigint_dig::traits::ModInverse;
+use num_prime::RandPrime;
+use rand::thread_rng;
 
 
-struct Keypair{
-    public_key: RsaPublicKey,
-    private_key: RsaPrivateKey
+struct Keypair {
+    public_key: PublicKey,
+    private_key: PrivateKey
+}
+
+struct PublicKey {
+    n: BigUint,
+    e: BigUint
+}
+
+struct PrivateKey {
+    p: BigUint,
+    q: BigUint,
+    d: BigUint
 }
 
 fn main() {
     
-    let keypair = rsa_key_gen();
-    universal_forgery(keypair);
+    let keypair = keygen();
+
+    // print keypair values
+    println!("n = {}", keypair.public_key.n);
+    println!("p = {}", keypair.private_key.p);
+    println!("q = {}", keypair.private_key.q);
+    println!("e = {}", keypair.public_key.e);
+    println!("d = {}", keypair.private_key.d);
 }
 
+// generates rsa keypair
+fn keygen() -> Keypair {
 
-fn universal_forgery(keypair: Keypair) {
+    let mut rng = thread_rng();
 
-    let public_key = keypair.public_key;
-    let message = BigUint::from(1234u32);
-    let e = public_key.e();
-    let n = public_key.n();
-    let mut r: BigUint;
-    let mut rng = rand::thread_rng();
+    // generate random primes
+    let p: BigUint = rng.gen_prime(1500, None);
+    let q: BigUint = rng.gen_prime(1500, None);
 
-    loop {
+    // calculate n, phi, e, d
+    let n = &p * &q;
 
-        // random r generation
-        let lower = BigUint::from(2u32);
-        let upper = n.clone();
-        r = rng.gen_range(lower..upper);
+    let one = BigUint::one();
+    let phi = (&p - &one) * (&q - &one);
 
-        println!("r: {}", r);
+    let e = BigUint::from(65537u32);
 
-        // check if r^e % n != 1
-        if r.modpow(e, n) != BigUint::one(){
-            break;
-        }
+    let d = e.modinv(&phi).expect("Modularer Inverser konnte nicht berechnet werden");
 
-    }
-    println!("r: {}", r);
-    // oracle calculating signature s'
-    let oracle_signature = &r * message.modpow(&keypair.private_key.d(), &n);
-
-
-    let inverse = r.mod_inverse(n);
-
-    let s = inverse * oracle_signature % n;
-    //TODO
-
-
-    println!("Message: {}", message);
-    println!("Signature from Oracle: {}", &oracle_signature);
-
-
-
+    return Keypair {
+        public_key: PublicKey { n, e },
+        private_key: PrivateKey {p, q, d},
+    };
 }
 
-
-fn rsa_key_gen() -> Keypair{
-
-    // initiate generator
-    let mut rng = OsRng;
-
-    // 3000-Bit private key gen
-    let bits = 30;
-    let private_key = RsaPrivateKey::new(&mut rng, bits)
-        .expect("Fehler beim Erzeugen des privaten Schlüssels");
-
-    let public_key = RsaPublicKey::from(&private_key);
-
-    // print paramenters
-    println!("n (Modulus): {}\n", private_key.n());
-    println!("e (Public exponent): {}\n", private_key.e());
-    println!("d (Private exponent): {}\n", private_key.d());
-    println!("p (Prime 1): {}\n", private_key.primes()[0]);
-    println!("q (Prime 2): {}\n", private_key.primes()[1]);
-
-    // save keypair for return
-    let keypair = Keypair {public_key: public_key, private_key: private_key};
-    return keypair;
-}
-
-
-/* 
-fn mod_inverse(a: &BigUint, c: &BigUint) -> Option<BigUint> {
-    // Iteriere über alle möglichen Werte für b (beginnend bei 1)
-    let mut b = BigUint::one();  // Startwert für b ist 1
-
-    loop {
-        if (a * &b) % c == BigUint::one() {
-            // Wenn a * b mod c == 1, dann haben wir die Inverse gefunden
-            return Some(b);
-        }
-        b += BigUint::one();  // Inkrementiere b
-        if b >= *c {
-            break; // Falls b >= c, gibt es keine Inverse
-        }
-    }
-
-    // Keine Inverse gefunden
-    None
-}*/
 
 

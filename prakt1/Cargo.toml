@@ -4,8 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-rsa = "0.9"
 rand = "0.8"
+num-bigint = { version = "0.4", features = ["rand"] }
+num-bigint-dig = "*"
 num-traits = "0.2"
-num-bigint = "0.4"
-num-bigint-dig = { version = "0.8", default-features=false }
+num-prime = "0.4"
