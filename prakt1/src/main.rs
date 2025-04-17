@@ -1,5 +1,5 @@
 
-use num_bigint::BigUint;
+use num_bigint::{BigUint, RandBigInt};
 use num_traits::One;
 use num_prime::RandPrime;
 use rand::thread_rng;
@@ -25,26 +25,54 @@ fn main() {
     
     // generate rsa keypair
     let keypair = keygen();
+    
+    // print rsa key values
+    print_key_values(&keypair);
+
+    universal_forgery(&keypair);
+
+}
+
+fn universal_forgery(key_pair: &KeyPair) {
+
+    let mut rng = thread_rng();
+    let mut r: BigUint = BigUint::from(1u32);
+
+    // find r with r^e mod n != 1
+    loop {
+        r = rng.gen_biguint(1000);
+        if r.modpow(&key_pair.public_key.e, &key_pair.public_key.n) != BigUint::from(1u32) {
+            break;
+        }
+    }
 
     // declare message
     let message: u32 = 4;
-    let x: BigUint = BigUint::from(message);
+    let m: BigUint = BigUint::from(message);
 
-    // sign message
-    let s = sign(x, &keypair);
+    // calculate r^e * m % n
+    let for_oracle = r.modpow(&key_pair.public_key.e, &key_pair.public_key.n) * &m % &key_pair.public_key.n;
+    
+    // s' from oracle
+    let s_strich = sign(&for_oracle, key_pair);
 
-    // print signed message
-    println!("Signed message:\n {}\n\n", s);
+    let s = r.modinv(&key_pair.public_key.n).unwrap() * s_strich % &key_pair.public_key.n;
 
-    // print rsa key values
-    print_key_values(&keypair);
+    let f = verify(&m, &s, key_pair);
+
+    println!("Verified: {}", f);
+    
 
 }
 
 
 // signs a message by calculating m^d % n 
-fn sign(m: BigUint, key_pair: &KeyPair) -> BigUint {
+fn sign(m: &BigUint, key_pair: &KeyPair) -> BigUint {
     return m.modpow(&key_pair.private_key.d, &key_pair.public_key.n);
+}
+
+fn verify(m: &BigUint, s: &BigUint, key_pair: &KeyPair)  -> bool {
+    return *m == s.modpow(&key_pair.public_key.e, &key_pair.public_key.n);
 }
 
 
@@ -54,14 +82,13 @@ fn keygen() -> KeyPair {
     let mut rng = thread_rng();
 
     // generate random primes
-    let p: BigUint = rng.gen_prime(1500, None);
-    let q: BigUint = rng.gen_prime(1500, None);
+    let p: BigUint = rng.gen_prime_exact(1500, None);
+    let q: BigUint = rng.gen_prime_exact(1500, None);
 
     // calculate n, phi, e, d
     let n = &p * &q;
 
-    let one = BigUint::one();
-    let phi = (&p - &one) * (&q - &one);
+    let phi = (&p - &BigUint::one()) * (&q - &BigUint::one());
 
     let e = BigUint::from(65537u32);
 
@@ -82,4 +109,25 @@ fn print_key_values(keypair: &KeyPair) {
     println!("q = {}\n", keypair.private_key.q);
     println!("e = {}\n", keypair.public_key.e);
     println!("d = {}\n", keypair.private_key.d);
+}
+
+#[cfg(test)]
+
+#[test]
+fn test_verify() {
+    let keypair = keygen();
+    let keypair2 = keygen();
+
+    // test if keys are not equal
+    assert_ne!(keypair.public_key.n, keypair2.public_key.n);
+
+    // declare message
+    let message: u32 = 4;
+    let x: BigUint = BigUint::from(message);
+
+    // sign message
+    let s = sign(&x, &keypair);
+
+    assert_eq!(true, verify(&x, &s, &keypair));
+    assert_eq!(false,verify(&x, &s, &keypair2));
 }
