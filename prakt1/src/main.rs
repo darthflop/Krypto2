@@ -1,11 +1,10 @@
-
 use std::{io::Write, time::Instant};
 use num_bigint::{BigUint, RandBigInt};
 use num_traits::One;
 use num_prime::{PrimalityUtils, RandPrime};
 use rand::thread_rng;
 use std::io;
-use std::fmt::Write as a;
+use std::fmt::Write as hexHelper;
 
 
 #[derive(Default)]
@@ -32,21 +31,22 @@ fn main() {
     // activates commandline
     //cli();
 
+    // wether to print values as hex
     let print_as_hex = true;
 
-    
     // generate rsa keypair
     let keypair = keygen();
 
     // print rsa key values
     print_key_values(&keypair, &print_as_hex);
 
-
-
+    // calculate universal forgery
     universal_forgery(&keypair, &print_as_hex);
 
 }
 
+
+// crafts universal forgery attack
 fn universal_forgery(key_pair: &KeyPair, hex: &bool) {
 
     let mut rng = thread_rng();
@@ -60,7 +60,6 @@ fn universal_forgery(key_pair: &KeyPair, hex: &bool) {
         }
     }
 
-
     // 1. choose a message for forgery
     println!("Please choose a message (int):");
     let mut message = String::new();
@@ -68,7 +67,6 @@ fn universal_forgery(key_pair: &KeyPair, hex: &bool) {
     let number: u32 = message.trim().parse().expect("Please enter a valid u32");
     let m: BigUint = BigUint::from(number);
     
-
     // 2. calculate r^e * m % n
     let for_oracle = r.modpow(&key_pair.public_key.e, &key_pair.public_key.n) * &m % &key_pair.public_key.n;
     
@@ -98,7 +96,7 @@ fn universal_forgery(key_pair: &KeyPair, hex: &bool) {
 }
 
 
-// signs a message by calculating m^d % n 
+// signs a message by calculating m^d % n
 fn sign(m: &BigUint, key_pair: &KeyPair) -> BigUint {
     return m.modpow(&key_pair.private_key.d, &key_pair.public_key.n);
 }
@@ -202,7 +200,8 @@ fn print_key_values(keypair: &KeyPair, hex: &bool) {
     println!("--------------------------------------------------------------------------\n\n");
 }
 
-// Helper function to convert BigUint to hex dump format
+
+// helper function to convert BigUint to hex dump format
 fn to_hexdump(n: &BigUint) -> String {
     // Convert BigUint to bytes
     let bytes = n.to_bytes_be();
@@ -264,8 +263,6 @@ fn cli() {
         input_string.clear();
     }
 }
-
-
 
 
 #[cfg(test)]
