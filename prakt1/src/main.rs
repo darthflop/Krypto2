@@ -1,7 +1,8 @@
 
+use std::time::Instant;
 use num_bigint::{BigUint, RandBigInt};
 use num_traits::One;
-use num_prime::RandPrime;
+use num_prime::{PrimalityUtils, RandPrime};
 use rand::thread_rng;
 
 
@@ -25,7 +26,7 @@ fn main() {
     
     // generate rsa keypair
     let keypair = keygen();
-    
+
     // print rsa key values
     print_key_values(&keypair);
 
@@ -79,11 +80,54 @@ fn verify(m: &BigUint, s: &BigUint, key_pair: &KeyPair)  -> bool {
 // generates rsa keypair
 fn keygen() -> KeyPair {
 
-    let mut rng = thread_rng();
 
-    // generate random primes
-    let p: BigUint = rng.gen_prime_exact(1500, None);
-    let q: BigUint = rng.gen_prime_exact(1500, None);
+    let now = Instant::now();
+    let mut rng = thread_rng();
+    let mut passed = false;
+
+    //prepare p and q
+    let mut p = BigUint::from(0u32);
+    let mut q = BigUint::from(0u32);
+
+    // loop for prime generation and miller-rabin tests
+    while !passed {
+
+        // generate random primes
+        p = rng.gen_prime_exact(1500, None);
+        q = rng.gen_prime_exact(1500, None);
+
+
+        // miller-rabin tests
+        println!("Performing Miller-Rabin Tests...");
+        let number = 60;
+        for _num in 0..number {
+
+            // generate base x = {2, 3, ..., p-2} / {2, 3, ..., q-2}
+            let base_p = rng.gen_biguint_range(&BigUint::from(2u32), &(&p - &BigUint::from(2u32)));
+            let base_q = rng.gen_biguint_range(&BigUint::from(2u32), &(&q - &BigUint::from(2u32)));
+            
+
+            // perform miller-rabin test
+            if &p.is_sprp(base_p) == &true && &q.is_sprp(base_q) == &true {
+
+                if _num < 10 {
+                    println!("  {}/60 passed.", {_num});
+                } else {
+                    println!(" {}/60 passed.", {_num});
+                }
+                passed = true;
+            } else {
+                if _num < 10 {
+                    println!("  {}/60 failed.\n Generating new primes.", {_num});
+                } else {
+                    println!(" {}/60 failed.\n Generating new primes.", {_num});
+                }
+                passed = false;
+                break;
+            }
+        }
+    }
+
 
     // calculate n, phi, e, d
     let n = &p * &q;
@@ -92,7 +136,12 @@ fn keygen() -> KeyPair {
 
     let e = BigUint::from(65537u32);
 
-    let d = e.modinv(&phi).expect("Modularer Inverser konnte nicht berechnet werden");
+    let d = e.modinv(&phi).expect("Couldn't find modular inverse.");
+
+    // benchmark
+    let elapsed_time = now.elapsed();
+    println!("\n-> All tests passed!");
+    println!("-> Key generation took {} ms.\n\n", elapsed_time.as_millis());
 
     return KeyPair {
         public_key: PublicKey { n, e },
