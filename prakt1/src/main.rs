@@ -1,21 +1,26 @@
 
-use std::time::Instant;
+use std::{io::Write, time::Instant};
 use num_bigint::{BigUint, RandBigInt};
 use num_traits::One;
 use num_prime::{PrimalityUtils, RandPrime};
 use rand::thread_rng;
+use std::io;
+use std::fmt::Write as a;
 
 
+#[derive(Default)]
 struct KeyPair {
     public_key: PublicKey,
     private_key: PrivateKey
 }
 
+#[derive(Default)]
 struct PublicKey {
     n: BigUint,
     e: BigUint
 }
 
+#[derive(Default)]
 struct PrivateKey {
     p: BigUint,
     q: BigUint,
@@ -23,18 +28,26 @@ struct PrivateKey {
 }
 
 fn main() {
+
+    // activates commandline
+    //cli();
+
+    let print_as_hex = true;
+
     
     // generate rsa keypair
     let keypair = keygen();
 
     // print rsa key values
-    print_key_values(&keypair);
+    print_key_values(&keypair, &print_as_hex);
 
-    universal_forgery(&keypair);
+
+
+    universal_forgery(&keypair, &print_as_hex);
 
 }
 
-fn universal_forgery(key_pair: &KeyPair) {
+fn universal_forgery(key_pair: &KeyPair, hex: &bool) {
 
     let mut rng = thread_rng();
     let mut r: BigUint = BigUint::from(1u32);
@@ -47,23 +60,41 @@ fn universal_forgery(key_pair: &KeyPair) {
         }
     }
 
-    // declare message
-    let message: u32 = 4;
-    let m: BigUint = BigUint::from(message);
 
-    // calculate r^e * m % n
+    // 1. choose a message for forgery
+    println!("Please choose a message (int):");
+    let mut message = String::new();
+    io::stdin().read_line(&mut message).unwrap();
+    let number: u32 = message.trim().parse().expect("Please enter a valid u32");
+    let m: BigUint = BigUint::from(number);
+    
+
+    // 2. calculate r^e * m % n
     let for_oracle = r.modpow(&key_pair.public_key.e, &key_pair.public_key.n) * &m % &key_pair.public_key.n;
     
-    // s' from oracle
+    // 3. get s' from oracle
     let s_strich = sign(&for_oracle, key_pair);
 
+    // 4. calculate s = r^-1 * s' % n = m^d mod n
     let s = r.modinv(&key_pair.public_key.n).unwrap() * s_strich % &key_pair.public_key.n;
 
-    let f = verify(&m, &s, key_pair);
+    // print crafted signing and real signing
+    if *hex {
+        println!("\nForged Message signing (r^-1 * s' % n):\n{}", to_hexdump(&s));
+        println!("\nSigning with private parameters (m^d % n):\n{}", to_hexdump(&m.modpow(&key_pair.private_key.d, &key_pair.public_key.n)));
+    } else {
+        println!("\nForged Message signing (r^-1 * s' % n):\n{}", s);
+        println!("\nSigning with private parameters (m^d % n):\n{}", m.modpow(&key_pair.private_key.d, &key_pair.public_key.n));
+    }
 
-    println!("Verified: {}", f);
-    
+    // 5. verify message
+    let verification = verify(&m, &s, key_pair);
 
+    if verification {
+        println!("\nThe forged message was verified.");
+    } else {
+        println!("\n-> The forged message couldn't be verified.");
+    }
 }
 
 
@@ -79,7 +110,6 @@ fn verify(m: &BigUint, s: &BigUint, key_pair: &KeyPair)  -> bool {
 
 // generates rsa keypair
 fn keygen() -> KeyPair {
-
 
     let now = Instant::now();
     let mut rng = thread_rng();
@@ -98,7 +128,7 @@ fn keygen() -> KeyPair {
 
 
         // miller-rabin tests
-        println!("Performing Miller-Rabin Tests...");
+        println!("\nPerforming Miller-Rabin Tests...");
         let number = 60;
         for _num in 0..number {
 
@@ -128,7 +158,6 @@ fn keygen() -> KeyPair {
         }
     }
 
-
     // calculate n, phi, e, d
     let n = &p * &q;
 
@@ -150,15 +179,94 @@ fn keygen() -> KeyPair {
 }
 
 
-fn print_key_values(keypair: &KeyPair) {
+fn print_key_values(keypair: &KeyPair, hex: &bool) {
+    // Helper to format numbers either in decimal or hexadecimal
+    let format = |n: &BigUint| {
+        if *hex {
+            to_hexdump(&n)
+        } else {
+            n.to_string()
+        }
+    };
+
     println!("--------------------------------------------------------------------------\n\n");
     println!("Generated keypair values:\n");
-    println!("n = {}\n", keypair.public_key.n);
-    println!("p = {}\n", keypair.private_key.p);
-    println!("q = {}\n", keypair.private_key.q);
-    println!("e = {}\n", keypair.public_key.e);
-    println!("d = {}\n", keypair.private_key.d);
+
+    // Print values in the desired format
+    println!("n: \n{}", format(&keypair.public_key.n));
+    println!("p: \n{}", format(&keypair.private_key.p));
+    println!("q: \n{}", format(&keypair.private_key.q));
+    println!("e (65537): \n{}", format(&keypair.public_key.e));
+    println!("d: \n{}", format(&keypair.private_key.d));
+
+    println!("--------------------------------------------------------------------------\n\n");
 }
+
+// Helper function to convert BigUint to hex dump format
+fn to_hexdump(n: &BigUint) -> String {
+    // Convert BigUint to bytes
+    let bytes = n.to_bytes_be();
+
+    let mut output = String::new();
+    let block_size = 32; // Number of bytes per block (e.g., 16 bytes)
+
+    // Group bytes in blocks and print as hex
+    for chunk in bytes.chunks(block_size) {
+        // Print hex bytes as a single line
+        let hex_line = chunk.iter()
+            .map(|byte| format!("{:02x}", byte)) // Format each byte in 2-digit hex
+            .collect::<Vec<String>>()
+            .join(" "); // Join bytes with space
+        
+        // Append to output
+        writeln!(output, "{}", hex_line).unwrap();
+    }
+    output
+}
+
+
+fn cli() {
+
+    let mut input_string = String::new();
+    let mut keypair = KeyPair::default();
+    let mut active_key = false;
+    
+    loop {
+        print!("> ");
+        io::stdout().flush().unwrap();
+
+        io::stdin().read_line(&mut input_string).unwrap();
+        match input_string.trim() {
+            "keygen" => {
+                if !active_key {
+                    keypair = keygen();
+                    active_key = true;
+                } else {
+                    println!("Key already generated. Use -new to overwrite.");
+                }
+            },
+            "keygen -new" => {
+                keypair = keygen();  
+            },
+            "print" => {
+                print_key_values(&keypair, &false);
+            }
+            "print -hex" => {
+                print_key_values(&keypair, &true);
+            }
+            "help" => {
+                println!("keygen -> Generates RSA Keypair. No overwrite of current Keypair.");
+                println!("keygen -new -> Generates RSA Keypair. Overwrites existing Keypair.");
+                println!("print -> Prints current RSA Keypair");
+            },
+            _=> print!("Unknown command. Use help for commands.\n"),
+        }
+        input_string.clear();
+    }
+}
+
+
+
 
 #[cfg(test)]
 
