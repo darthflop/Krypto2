@@ -4,6 +4,7 @@ use num_traits::One;
 use num_prime::{nt_funcs::is_prime, RandPrime, PrimalityUtils};
 use rand::thread_rng;
 use std::fmt::Write as hexHelper;
+use sha2::{Sha256, Digest};
 
 #[derive(Default)]
 struct KeyPair {
@@ -24,6 +25,12 @@ struct PrivateKey {
     a: BigUint
 }
 
+#[derive(Default)]
+struct DigitalSignature {
+    gamma: BigUint,
+    delta: BigUint
+}
+
 fn main() {
 
     // print values in hex?
@@ -31,7 +38,16 @@ fn main() {
 
     let keypair = dsa_keygen();
     print_key_values(&keypair, &print_hex);
+
+    // sign and verify message
+    let message = b"Hello World";
+    let signed_message = sign(message, &keypair);
+
+    // print signed message parameters
+    println!("\n\ngamma:\n{}", to_hexdump(&signed_message.gamma));
+    println!("delta:\n{}", to_hexdump(&signed_message.delta));
 }
+
 
 fn dsa_keygen() -> KeyPair {
 
@@ -116,6 +132,33 @@ fn generate_generator(p: &BigUint, q: &BigUint) -> BigUint {
 }
 
 
+fn sign(message: &[u8], keypair: &KeyPair) -> DigitalSignature{
+
+    let mut rng = thread_rng();
+
+    // random number r
+    let r = rng.gen_biguint_range(&BigUint::one(), &(&keypair.public_key.q - BigUint::one()));
+
+    // calculate gamma = (alpha^r mod p) mod q
+    let gamma = keypair.public_key.alpha.modpow(&r, &keypair.public_key.p) % &keypair.public_key.q;
+
+    // hash the message
+    let hash = Sha256::digest(&message);
+    let h = BigUint::from_bytes_be(&hash) % &keypair.public_key.q;
+
+    // print hash (for testing purpose)
+    println!("SHA-256 Hash (hex):");
+    for byte in hash.iter() {
+        print!("{:02x} ", byte);
+    }
+
+    // calculate delta = (hash(message) + a * gamma) * r^-1 % q
+    let delta = (h + &keypair.private_key.a * &gamma) * r.modinv(&keypair.public_key.q).unwrap() % &keypair.public_key.q;
+
+    return DigitalSignature {gamma, delta};
+}
+
+
 fn miller_rabin(p: &BigUint) -> bool {
 
     let mut rng = thread_rng();
@@ -144,6 +187,7 @@ fn miller_rabin(p: &BigUint) -> bool {
     println!("\n");
     return passed;
 }
+
 
 fn print_key_values(keypair: &KeyPair, hex: &bool) {
 
