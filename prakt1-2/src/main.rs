@@ -5,8 +5,6 @@ use num_prime::{nt_funcs::is_prime, RandPrime, PrimalityUtils};
 use rand::thread_rng;
 use std::fmt::Write as hexHelper;
 
-
-
 #[derive(Default)]
 struct KeyPair {
     public_key: PublicKey,
@@ -15,19 +13,24 @@ struct KeyPair {
 
 #[derive(Default)]
 struct PublicKey {
-    n: BigUint,
-    e: BigUint
+    p: BigUint,
+    q: BigUint,
+    alpha: BigUint,
+    beta: BigUint
 }
 
 #[derive(Default)]
 struct PrivateKey {
-    p: BigUint,
-    q: BigUint,
-    d: BigUint
+    a: BigUint
 }
 
 fn main() {
-    dsa_keygen();
+
+    // print values in hex?
+    let print_hex = true;
+
+    let keypair = dsa_keygen();
+    print_key_values(&keypair, &print_hex);
 }
 
 fn dsa_keygen() -> KeyPair {
@@ -36,20 +39,20 @@ fn dsa_keygen() -> KeyPair {
     let mut rng = thread_rng();
     let mut passed = false;
 
-    //prepare p and q
+    // initiate p, q
     let mut p = BigUint::from(0u32);
     let mut q = BigUint::from(0u32);
-    let mut c = BigUint::from(0u32);
 
     // limit the number of attempts to avoid infinite loop
     let max_attempts = 500; 
+
     // tries to find p - 1 = c * q
     while !passed {
 
         q = rng.gen_prime(256, None);
 
-        // calculate c size for 3072 bit key
-        c = (BigUint::from(2u64).pow(3072 as u32) - BigUint::one()) / &q;
+        // generate random c in range
+        let mut c = rng.gen_biguint(3072 - 256);
 
         // reset attempts
         let mut attempts = 0;
@@ -74,20 +77,44 @@ fn dsa_keygen() -> KeyPair {
         }
     }
 
-    println!("p:\n{}", &p);
-    println!("\nq:\n{}", &q);
-    
-    println!("\np - 1 = c * q -> {}", &p - BigUint::one() == &c * &q);
+    // calculate generator alpha
+    let alpha = generate_generator(&p, &q);
 
+     // a = {1, ..., q-1}
+    let a = rng.gen_biguint_range(&BigUint::from(1u32), &(&q - BigUint::one()));
 
+    // calculate beta
+    let beta = alpha.modpow(&a, &p);
 
     // benchmark
     let elapsed_time = now.elapsed();
     println!("\n-> All tests passed!");
     println!("-> Key generation took {} ms.\n\n", elapsed_time.as_millis());
 
-    return KeyPair::default();
+    return KeyPair {
+        public_key: PublicKey { p, q, alpha, beta },
+        private_key: PrivateKey {a},
+    };
 }
+
+
+// g = h^((p-1)/q) mod p, wobei h = {2, 3, ..., p − 2}
+fn generate_generator(p: &BigUint, q: &BigUint) -> BigUint {
+    
+    let mut rng = thread_rng();
+    let one = BigUint::one();
+    let exponent = (p - &one) / q;
+
+    loop {
+        let h = rng.gen_biguint_range(&BigUint::from(2u32), &(p - BigUint::from(2u32)));
+        let g = h.modpow(&exponent, p);
+
+        if g > one {
+            return g;
+        }
+    }
+}
+
 
 fn miller_rabin(p: &BigUint) -> bool {
 
@@ -95,7 +122,7 @@ fn miller_rabin(p: &BigUint) -> bool {
     let mut passed = false;
 
         // miller-rabin tests
-        println!("\nPerforming Miller-Rabin Tests...");
+        println!("Performing Miller-Rabin Tests...");
         let number = 60;
         for _num in 0..number {
     
@@ -119,7 +146,8 @@ fn miller_rabin(p: &BigUint) -> bool {
 }
 
 fn print_key_values(keypair: &KeyPair, hex: &bool) {
-    // Helper to format numbers either in decimal or hexadecimal
+
+    // print in hex or decimal
     let format = |n: &BigUint| {
         if *hex {
             to_hexdump(&n)
@@ -129,10 +157,14 @@ fn print_key_values(keypair: &KeyPair, hex: &bool) {
     };
 
     println!("--------------------------------------------------------------------------\n\n");
-    println!("Generated keypair values:\n");
+    println!("Generated keypair values:");
 
     // Print values in the desired format
-
+    println!("\np: \n{}", format(&keypair.public_key.p));
+    println!("\nq: \n{}", format(&keypair.public_key.q));
+    println!("\nalpha: \n{}", format(&keypair.public_key.alpha));
+    println!("\na: \n{}", format(&keypair.private_key.a));
+    println!("\nbeta: \n{}", format(&keypair.public_key.beta));
 
     println!("--------------------------------------------------------------------------\n\n");
 }
