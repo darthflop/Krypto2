@@ -59,9 +59,6 @@ fn dsa_keygen() -> KeyPair {
     let mut p = BigUint::from(0u32);
     let mut q = BigUint::from(0u32);
 
-    // limit the number of attempts to avoid infinite loop
-    let max_attempts = 500; 
-
     // tries to find p - 1 = c * q
     while !passed {
 
@@ -69,27 +66,17 @@ fn dsa_keygen() -> KeyPair {
 
         // generate random c in range
         let mut c = rng.gen_biguint(3072 - 256);
+        
+        // calculate p
+        p = &q * &c + BigUint::one();
 
-        // reset attempts
-        let mut attempts = 0;
-
-        while attempts < max_attempts {
-
-            // calculate p
-            p = &q * &c + BigUint::one();
-
-            // check if p is probably prime and p - 1 = c * q
-            if is_prime(&p, None).probably() && &p - BigUint::one() == &c * &q {
+        // check if p is probably prime and p - 1 = c * q
+        if is_prime(&p, None).probably() && &p - BigUint::one() == &c * &q {
                 
-                if miller_rabin(&p) && miller_rabin(&q) {
-                    passed = true;
-                    break;
-                }
+            if miller_rabin(&p) && miller_rabin(&q) {
+                passed = true;
+                break;
             }
-
-            // increase step size to quickly explore larger values of c
-            c += 10u32; 
-            attempts += 1;
         }
     }
 
