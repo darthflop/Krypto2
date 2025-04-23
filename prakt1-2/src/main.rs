@@ -1,6 +1,6 @@
 use std::time::Instant;
 use num_bigint::{BigUint, RandBigInt};
-use num_traits::One;
+use num_traits::{pow, One};
 use num_prime::{nt_funcs::is_prime, RandPrime, PrimalityUtils};
 use rand::thread_rng;
 use std::fmt::Write as hexHelper;
@@ -53,20 +53,6 @@ fn main() {
 }
 
 
-fn verify(signature: &DigitalSignature, keypair: &KeyPair) -> bool {
-
-    let delta_inverse = &signature.delta.modinv(&keypair.public_key.p).unwrap();
-
-    let e1 = &signature.hash *  delta_inverse % &keypair.public_key.q;
-    let e2 = &signature.gamma * delta_inverse % &keypair.public_key.q;
-
-    println!("1: {}", &keypair.public_key.alpha.modpow(&e1, &keypair.public_key.p) * &keypair.public_key.beta.modpow(&e2, &keypair.public_key.p) % &keypair.public_key.q);
-    println!("2: {}", signature.gamma);
-
-    return &keypair.public_key.alpha.modpow(&e1, &keypair.public_key.p) * &keypair.public_key.beta.modpow(&e2, &keypair.public_key.p) % &keypair.public_key.q == signature.gamma;
-}
-
-
 fn dsa_keygen() -> KeyPair {
 
     let now = Instant::now();
@@ -90,7 +76,7 @@ fn dsa_keygen() -> KeyPair {
 
         // check if p is probably prime and p - 1 = c * q
         if is_prime(&p, None).probably() && &p - BigUint::one() == &c * &q {
-                
+            
             if miller_rabin(&p) && miller_rabin(&q) {
                 passed = true;
                 break;
@@ -119,6 +105,56 @@ fn dsa_keygen() -> KeyPair {
 }
 
 
+fn sign(message: &[u8], keypair: &KeyPair) -> DigitalSignature{
+
+    let mut rng = thread_rng();
+
+    // random number r
+    let r = rng.gen_biguint_range(&BigUint::one(), &(&keypair.public_key.q - BigUint::one()));
+
+    // calculate gamma = (alpha^r mod p) mod q
+    let gamma = keypair.public_key.alpha.modpow(&r, &keypair.public_key.p) % &keypair.public_key.q;
+
+    // hash the message
+    let h = calculate_hash(&message);
+
+    // calculate delta = (hash(message) + a * gamma) * r^-1 % q
+    let delta = (&h + &keypair.private_key.a * &gamma) * r.modinv(&keypair.public_key.q).unwrap() % &keypair.public_key.q;
+
+    return DigitalSignature {gamma, delta, hash: h};
+}
+
+
+fn verify(signature: &DigitalSignature, keypair: &KeyPair) -> bool {
+
+    let delta_inverse = &signature.delta.modinv(&keypair.public_key.q).unwrap();
+
+    let e1 = &signature.hash *  delta_inverse % &keypair.public_key.q;
+    let e2 = &signature.gamma * delta_inverse % &keypair.public_key.q;
+
+    //println!("1: {}", (&keypair.public_key.alpha.modpow(&e1, &keypair.public_key.p) * &keypair.public_key.beta.modpow(&e2, &keypair.public_key.p) % &keypair.public_key.p ) % &keypair.public_key.q);
+    //println!("2: {}", signature.gamma);
+
+    return (&keypair.public_key.alpha.modpow(&e1, &keypair.public_key.p) * &keypair.public_key.beta.modpow(&e2, &keypair.public_key.p) % &keypair.public_key.p ) % &keypair.public_key.q == signature.gamma;
+}
+
+
+// calculates hash and converts it to integer
+fn calculate_hash(message: &[u8]) -> BigUint {
+
+    let hash = Sha256::digest(&message);
+    let mut output:u32 = 0;
+    let mut n = message.len();
+
+    for byte in hash.iter() {
+        output += (*byte as u32) * pow(2, n);
+        n -= 1;
+    }
+    
+    return BigUint::from(output);
+}
+
+
 // g = h^((p-1)/q) mod p, wobei h = {2, 3, ..., p − 2}
 fn generate_generator(p: &BigUint, q: &BigUint) -> BigUint {
     
@@ -134,33 +170,6 @@ fn generate_generator(p: &BigUint, q: &BigUint) -> BigUint {
             return g;
         }
     }
-}
-
-
-fn sign(message: &[u8], keypair: &KeyPair) -> DigitalSignature{
-
-    let mut rng = thread_rng();
-
-    // random number r
-    let r = rng.gen_biguint_range(&BigUint::one(), &(&keypair.public_key.q - BigUint::one()));
-
-    // calculate gamma = (alpha^r mod p) mod q
-    let gamma = (keypair.public_key.alpha.modpow(&r, &keypair.public_key.p) % &keypair.public_key.p) % &keypair.public_key.q;
-
-    // hash the message
-    let hash = Sha256::digest(&message);
-    let h: BigUint = BigUint::from_bytes_be(&hash) % &keypair.public_key.q;
-
-    // print hash (for testing purpose)
-    println!("SHA-256 Hash (hex):");
-    for byte in hash.iter() {
-        print!("{:02x} ", byte);
-    }
-
-    // calculate delta = (hash(message) + a * gamma) * r^-1 % q
-    let delta = (&h + &keypair.private_key.a * &gamma) * r.modinv(&keypair.public_key.q).unwrap() % &keypair.public_key.q;
-
-    return DigitalSignature {gamma, delta, hash: h};
 }
 
 
