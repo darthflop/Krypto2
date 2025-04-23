@@ -28,7 +28,8 @@ struct PrivateKey {
 #[derive(Default)]
 struct DigitalSignature {
     gamma: BigUint,
-    delta: BigUint
+    delta: BigUint,
+    hash: BigUint
 }
 
 fn main() {
@@ -44,8 +45,25 @@ fn main() {
     let signed_message = sign(message, &keypair);
 
     // print signed message parameters
-    println!("\n\ngamma:\n{}", to_hexdump(&signed_message.gamma));
-    println!("delta:\n{}", to_hexdump(&signed_message.delta));
+    //println!("\n\ngamma:\n{}", to_hexdump(&signed_message.gamma));
+    //println!("delta:\n{}", to_hexdump(&signed_message.delta));
+
+    println!("{}", &signed_message.hash);
+    println!("Verified: {}", verify(&signed_message, &keypair));
+}
+
+
+fn verify(signature: &DigitalSignature, keypair: &KeyPair) -> bool {
+
+    let delta_inverse = &signature.delta.modinv(&keypair.public_key.p).unwrap();
+
+    let e1 = &signature.hash *  delta_inverse % &keypair.public_key.q;
+    let e2 = &signature.gamma * delta_inverse % &keypair.public_key.q;
+
+    println!("1: {}", &keypair.public_key.alpha.modpow(&e1, &keypair.public_key.p) * &keypair.public_key.beta.modpow(&e2, &keypair.public_key.p) % &keypair.public_key.q);
+    println!("2: {}", signature.gamma);
+
+    return &keypair.public_key.alpha.modpow(&e1, &keypair.public_key.p) * &keypair.public_key.beta.modpow(&e2, &keypair.public_key.p) % &keypair.public_key.q == signature.gamma;
 }
 
 
@@ -65,7 +83,7 @@ fn dsa_keygen() -> KeyPair {
         q = rng.gen_prime(256, None);
 
         // generate random c in range
-        let mut c = rng.gen_biguint(3072 - 256);
+        let c = rng.gen_biguint(3072 - 256);
         
         // calculate p
         p = &q * &c + BigUint::one();
@@ -127,11 +145,11 @@ fn sign(message: &[u8], keypair: &KeyPair) -> DigitalSignature{
     let r = rng.gen_biguint_range(&BigUint::one(), &(&keypair.public_key.q - BigUint::one()));
 
     // calculate gamma = (alpha^r mod p) mod q
-    let gamma = keypair.public_key.alpha.modpow(&r, &keypair.public_key.p) % &keypair.public_key.q;
+    let gamma = (keypair.public_key.alpha.modpow(&r, &keypair.public_key.p) % &keypair.public_key.p) % &keypair.public_key.q;
 
     // hash the message
     let hash = Sha256::digest(&message);
-    let h = BigUint::from_bytes_be(&hash) % &keypair.public_key.q;
+    let h: BigUint = BigUint::from_bytes_be(&hash) % &keypair.public_key.q;
 
     // print hash (for testing purpose)
     println!("SHA-256 Hash (hex):");
@@ -140,9 +158,9 @@ fn sign(message: &[u8], keypair: &KeyPair) -> DigitalSignature{
     }
 
     // calculate delta = (hash(message) + a * gamma) * r^-1 % q
-    let delta = (h + &keypair.private_key.a * &gamma) * r.modinv(&keypair.public_key.q).unwrap() % &keypair.public_key.q;
+    let delta = (&h + &keypair.private_key.a * &gamma) * r.modinv(&keypair.public_key.q).unwrap() % &keypair.public_key.q;
 
-    return DigitalSignature {gamma, delta};
+    return DigitalSignature {gamma, delta, hash: h};
 }
 
 
