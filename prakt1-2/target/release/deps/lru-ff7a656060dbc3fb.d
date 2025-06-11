@@ -1,0 +1,7 @@
+C:\Users\Filip\Documents\Rust\Krypto2\prakt1-2\target\release\deps\liblru-ff7a656060dbc3fb.rmeta: C:\Users\Filip\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\lru-0.12.5\src\lib.rs
+
+C:\Users\Filip\Documents\Rust\Krypto2\prakt1-2\target\release\deps\liblru-ff7a656060dbc3fb.rlib: C:\Users\Filip\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\lru-0.12.5\src\lib.rs
+
+C:\Users\Filip\Documents\Rust\Krypto2\prakt1-2\target\release\deps\lru-ff7a656060dbc3fb.d: C:\Users\Filip\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\lru-0.12.5\src\lib.rs
+
+C:\Users\Filip\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\lru-0.12.5\src\lib.rs:
