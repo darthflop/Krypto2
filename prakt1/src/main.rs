@@ -284,4 +284,5 @@ fn test_verify() {
 
     assert_eq!(true, verify(&x, &s, &keypair));
     assert_eq!(false,verify(&x, &s, &keypair2));
+    
 }
